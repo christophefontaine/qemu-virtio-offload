@@ -19,6 +19,7 @@
 #include <stddef.h>
 #include <poll.h>
 #include <linux/vhost.h>
+#include <linux/netlink.h>
 #include <pthread.h>
 #include "standard-headers/linux/virtio_ring.h"
 
@@ -109,6 +110,11 @@ typedef enum VhostUserRequest {
     VHOST_USER_GET_MAX_MEM_SLOTS = 36,
     VHOST_USER_ADD_MEM_REG = 37,
     VHOST_USER_REM_MEM_REG = 38,
+    VHOST_USER_SET_STATUS = 39,
+    VHOST_USER_GET_STATUS = 40,
+    VHOST_USER_FLOW_CREATE = 41,
+    VHOST_USER_FLOW_DESTROY = 42,
+    VHOST_USER_FLOW_QUERY = 43,
     VHOST_USER_MAX
 } VhostUserRequest;
 
@@ -170,6 +176,18 @@ typedef struct VhostUserInflight {
     uint16_t queue_size;
 } VhostUserInflight;
 
+typedef struct VhostUserFlowDesc {
+    uint64_t flow_id;
+    struct nlmsghdr hdr;
+    uint8_t data[1024];
+} VhostUserFlowDesc;
+
+typedef struct VhostUserFlowStats {
+    uint64_t flow_id;
+    uint64_t hits;
+    uint64_t bytes;
+} VhostUserFlowStats;
+
 #if defined(_WIN32) && (defined(__x86_64__) || defined(__i386__))
 # define VU_PACKED __attribute__((gcc_struct, packed))
 #else
@@ -197,6 +215,8 @@ typedef struct VhostUserMsg {
         VhostUserConfig config;
         VhostUserVringArea area;
         VhostUserInflight inflight;
+        VhostUserFlowDesc flow_desc;
+        VhostUserFlowStats flow_stats;
     } payload;
 
     int fds[VHOST_MEMORY_BASELINE_NREGIONS];

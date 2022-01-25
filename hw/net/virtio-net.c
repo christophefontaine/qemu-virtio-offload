@@ -934,6 +934,9 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint64_t features)
             }
         }
     }
+
+    n->has_flow_offload = virtio_has_feature(features, VIRTIO_NET_F_FLOW_OFFLOAD) &&
+    virtio_has_feature(features, VIRTIO_NET_F_CTRL_VQ);
 }
 
 static int virtio_net_handle_rx_mode(VirtIONet *n, uint8_t cmd,
@@ -1416,6 +1419,60 @@ static int virtio_net_handle_mq(VirtIONet *n, uint8_t cmd,
     return VIRTIO_NET_OK;
 }
 
+static int virtio_net_handle_flow_offload_crud(VirtIONet *n, uint8_t cmd,
+                                struct iovec *iov, unsigned int iov_cnt)
+{
+    size_t s = 0;
+    int ret = 0;
+    VirtIODevice *vdev = VIRTIO_DEVICE(n);
+    NetClientState *nc = qemu_get_queue(n->nic);
+
+    if (!virtio_vdev_has_feature(vdev, VIRTIO_NET_F_FLOW_OFFLOAD)) {
+        return VIRTIO_NET_ERR;
+    }
+
+    if (!get_vhost_net(nc->peer)) {
+        return VIRTIO_NET_ERR;
+    }
+
+    switch(cmd) {
+        case VIRTIO_NET_CTRL_FLOW_CREATE:
+            {
+                struct virtio_net_flow_desc flow_desc;
+                s = iov_to_buf(iov, iov_cnt, 0, &flow_desc, sizeof(flow_desc));
+                if(s)
+                    ret = vhost_net_flow_create(get_vhost_net(nc->peer), &flow_desc);
+            }
+            break;
+        case VIRTIO_NET_CTRL_FLOW_DESTROY:
+            {
+                uint64_t flow_id;
+                s = iov_to_buf(iov, iov_cnt, 0, &flow_id, sizeof(uint64_t));
+                if(s)
+                    ret = vhost_net_flow_destroy(get_vhost_net(nc->peer), flow_id);
+            }
+            break;
+        case VIRTIO_NET_CTRL_FLOW_QUERY:
+            {
+                struct virtio_net_flow_stats flow_stats;
+                s = iov_to_buf(iov, iov_cnt, 0, &flow_stats, sizeof(flow_stats));
+                if(s) {
+                    ret = vhost_net_flow_query(get_vhost_net(nc->peer), &flow_stats);
+                    if (ret < 0)
+	                return VIRTIO_NET_ERR;
+                    iov_from_buf(iov, iov_cnt, 0, &flow_stats, sizeof(flow_stats));
+                }
+            }
+            break;
+        default:
+            return VIRTIO_NET_ERR;
+            break;
+    }
+
+    return (s && !ret ? VIRTIO_NET_OK:VIRTIO_NET_ERR);
+}
+
+
 static void virtio_net_handle_ctrl(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtIONet *n = VIRTIO_NET(vdev);
@@ -1457,12 +1514,14 @@ static void virtio_net_handle_ctrl(VirtIODevice *vdev, VirtQueue *vq)
             status = virtio_net_handle_mq(n, ctrl.cmd, iov, iov_cnt);
         } else if (ctrl.class == VIRTIO_NET_CTRL_GUEST_OFFLOADS) {
             status = virtio_net_handle_offloads(n, ctrl.cmd, iov, iov_cnt);
+        } else if (ctrl.class == VIRTIO_NET_CTRL_FLOW) {
+            status = virtio_net_handle_flow_offload_crud(n, ctrl.cmd, iov, iov_cnt);
         }
 
         s = iov_from_buf(elem->in_sg, elem->in_num, 0, &status, sizeof(status));
         assert(s == sizeof(status));
-
         virtqueue_push(vq, elem, sizeof(status));
+
         virtio_notify(vdev, vq);
         g_free(iov2);
         g_free(elem);
@@ -3674,6 +3733,8 @@ static Property virtio_net_properties[] = {
                     VIRTIO_NET_F_HASH_REPORT, false),
     DEFINE_PROP_BIT64("guest_rsc_ext", VirtIONet, host_features,
                     VIRTIO_NET_F_RSC_EXT, false),
+    DEFINE_PROP_BIT64("flow_offload", VirtIONet, host_features,
+                    VIRTIO_NET_F_FLOW_OFFLOAD, true),
     DEFINE_PROP_UINT32("rsc_interval", VirtIONet, rsc_timeout,
                        VIRTIO_NET_RSC_DEFAULT_INTERVAL),
     DEFINE_NIC_PROPERTIES(VirtIONet, nic_conf),

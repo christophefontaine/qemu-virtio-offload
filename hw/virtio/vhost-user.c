@@ -26,6 +26,7 @@
 #include "migration/postcopy-ram.h"
 #include "trace.h"
 
+#include <linux/netlink.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -125,6 +126,11 @@ typedef enum VhostUserRequest {
     VHOST_USER_GET_MAX_MEM_SLOTS = 36,
     VHOST_USER_ADD_MEM_REG = 37,
     VHOST_USER_REM_MEM_REG = 38,
+    VHOST_USER_SET_STATUS = 39,
+    VHOST_USER_GET_STATUS = 40,
+    VHOST_USER_FLOW_CREATE = 41,
+    VHOST_USER_FLOW_DESTROY = 42,
+    VHOST_USER_FLOW_QUERY = 43,
     VHOST_USER_MAX
 } VhostUserRequest;
 
@@ -219,6 +225,8 @@ typedef union {
         VhostUserCryptoSession session;
         VhostUserVringArea area;
         VhostUserInflight inflight;
+	struct virtio_net_flow_desc flow_desc;
+	struct virtio_net_flow_stats flow_stats;
 } VhostUserPayload;
 
 typedef struct VhostUserMsg {
@@ -2538,6 +2546,60 @@ void vhost_user_cleanup(VhostUserState *user)
     user->chr = NULL;
 }
 
+static bool vhost_user_flow_offload_create(struct vhost_dev *dev, struct virtio_net_flow_desc *spec)
+{
+    VhostUserMsg msg = {
+        .hdr.request = VHOST_USER_FLOW_CREATE,
+        .hdr.flags = VHOST_USER_VERSION,
+        .hdr.size = sizeof(msg.payload.flow_desc),
+    };
+    memcpy(&msg.payload.flow_desc, spec, sizeof(msg.payload.flow_desc));
+    return vhost_user_write(dev, &msg, NULL, 0);
+}
+
+static bool vhost_user_flow_offload_destroy(struct vhost_dev *dev, uint64_t flow_id)
+{
+    VhostUserMsg msg = {
+        .hdr.request = VHOST_USER_FLOW_DESTROY,
+        .hdr.flags = VHOST_USER_VERSION,
+        .payload.u64 = flow_id,
+        .hdr.size = sizeof(msg.payload.u64),
+    };
+    return vhost_user_write(dev, &msg, NULL, 0);
+}
+
+static bool vhost_user_flow_offload_query(struct vhost_dev *dev, struct virtio_net_flow_stats *stats)
+{
+    int ret;
+    VhostUserMsg msg = {
+        .hdr.request = VHOST_USER_FLOW_QUERY,
+        .hdr.flags = VHOST_USER_VERSION | VHOST_USER_NEED_REPLY_MASK,
+        .payload.flow_stats.flow_id = stats->flow_id,
+        .hdr.size = sizeof(msg.payload.flow_stats),
+    };
+    VhostUserMsg msg_reply;
+
+    ret = vhost_user_write(dev, &msg, NULL, 0);
+    if (ret < 0) {
+        return ret;
+    }
+
+    ret = vhost_user_read(dev, &msg_reply);
+    if (msg_reply.hdr.request != msg.hdr.request) {
+        error_report("Received unexpected msg type. "
+                     "Expected %d received %d",
+                     msg.hdr.request, msg_reply.hdr.request);
+        return -EPROTO;
+    }
+
+    if (msg.payload.flow_stats.flow_id != stats->flow_id)
+	    return -EIO;
+
+    stats->hits = msg_reply.payload.flow_stats.hits;
+    stats->bytes = msg_reply.payload.flow_stats.bytes;
+    return 0;
+}
+
 const VhostOps user_ops = {
         .backend_type = VHOST_BACKEND_TYPE_USER,
         .vhost_backend_init = vhost_user_backend_init,
@@ -2571,4 +2633,7 @@ const VhostOps user_ops = {
         .vhost_backend_mem_section_filter = vhost_user_mem_section_filter,
         .vhost_get_inflight_fd = vhost_user_get_inflight_fd,
         .vhost_set_inflight_fd = vhost_user_set_inflight_fd,
+        .vhost_flow_offload_create = vhost_user_flow_offload_create,
+        .vhost_flow_offload_destroy = vhost_user_flow_offload_destroy,
+        .vhost_flow_offload_query = vhost_user_flow_offload_query,
 };

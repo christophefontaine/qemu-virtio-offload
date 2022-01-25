@@ -174,6 +174,7 @@ struct VirtIONet {
     uint8_t rsc4_enabled;
     uint8_t rsc6_enabled;
     uint8_t has_ufo;
+    uint8_t has_flow_offload;
     uint32_t mergeable_rx_bufs;
     uint8_t promisc;
     uint8_t allmulti;

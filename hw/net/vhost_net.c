@@ -80,6 +80,7 @@ static const int user_feature_bits[] = {
     VIRTIO_NET_F_GUEST_ANNOUNCE,
 
     VIRTIO_NET_F_MQ,
+    VIRTIO_NET_F_FLOW_OFFLOAD,
 
     VHOST_INVALID_FEATURE_BIT
 };
@@ -511,4 +512,31 @@ int vhost_net_set_mtu(struct vhost_net *net, uint16_t mtu)
     }
 
     return vhost_ops->vhost_net_set_mtu(&net->dev, mtu);
+}
+
+int vhost_net_flow_create(struct vhost_net *net, struct virtio_net_flow_desc *flow_desc)
+{
+    const VhostOps *vhost_ops = net->dev.vhost_ops;
+    if (!vhost_ops->vhost_flow_offload_create) {
+        return 0;
+    }
+    return vhost_ops->vhost_flow_offload_create(&net->dev, flow_desc);
+}
+
+int vhost_net_flow_destroy(struct vhost_net *net, uint64_t flow_id)
+{
+    const VhostOps *vhost_ops = net->dev.vhost_ops;
+    if (!vhost_ops->vhost_flow_offload_destroy) {
+        return 0;
+    }
+    return vhost_ops->vhost_flow_offload_destroy(&net->dev, flow_id);
+}
+
+int vhost_net_flow_query(struct vhost_net *net, struct virtio_net_flow_stats *flow_stats)
+{
+    const VhostOps *vhost_ops = net->dev.vhost_ops;
+    if (!vhost_ops->vhost_flow_offload_query) {
+        return 0;
+    }
+    return vhost_ops->vhost_flow_offload_query(&net->dev, flow_stats);
 }

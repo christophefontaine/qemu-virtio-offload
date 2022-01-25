@@ -25,6 +25,8 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
+
+#include <linux/netlink.h>
 #include "standard-headers/linux/types.h"
 #include "standard-headers/linux/virtio_ids.h"
 #include "standard-headers/linux/virtio_config.h"
@@ -57,6 +59,7 @@
 					 * Steering */
 #define VIRTIO_NET_F_CTRL_MAC_ADDR 23	/* Set MAC address */
 
+#define VIRTIO_NET_F_FLOW_OFFLOAD 56        /* Device supports Flow Offload */
 #define VIRTIO_NET_F_HASH_REPORT  57	/* Supports hash report */
 #define VIRTIO_NET_F_RSS	  60	/* Supports RSS RX steering */
 #define VIRTIO_NET_F_RSC_EXT	  61	/* extended coalescing info */
@@ -354,5 +357,28 @@ struct virtio_net_hash_config {
  */
 #define VIRTIO_NET_CTRL_GUEST_OFFLOADS   5
 #define VIRTIO_NET_CTRL_GUEST_OFFLOADS_SET        0
+
+
+/*
+ * Flow offload create/delete/query actions
+ *
+ * Available with the VIRTIO_NET_F_FLOW_OFFLOAD feature bit.
+ */
+#define VIRTIO_NET_CTRL_FLOW              6
+#define VIRTIO_NET_CTRL_FLOW_CREATE       1
+#define VIRTIO_NET_CTRL_FLOW_DESTROY      2
+#define VIRTIO_NET_CTRL_FLOW_QUERY        3
+
+struct virtio_net_flow_desc {
+	uint64_t flow_id;
+	struct nlmsghdr hdr;
+	uint8_t data[1024];
+};
+
+struct virtio_net_flow_stats {
+	uint64_t flow_id;
+	uint64_t hits;
+	uint64_t bytes;
+};
 
 #endif /* _LINUX_VIRTIO_NET_H */

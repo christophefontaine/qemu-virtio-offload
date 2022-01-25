@@ -48,4 +48,7 @@ uint64_t vhost_net_get_acked_features(VHostNetState *net);
 
 int vhost_net_set_mtu(struct vhost_net *net, uint16_t mtu);
 
+int vhost_net_flow_create(struct vhost_net *net, struct virtio_net_flow_desc *flow_desc);
+int vhost_net_flow_destroy(struct vhost_net *net, uint64_t flow_id);
+int vhost_net_flow_query(struct vhost_net *net, struct virtio_net_flow_stats *flow_stats);
 #endif

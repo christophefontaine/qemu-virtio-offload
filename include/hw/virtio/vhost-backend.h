@@ -36,6 +36,8 @@ struct vhost_vring_addr;
 struct vhost_scsi_target;
 struct vhost_iotlb_msg;
 struct vhost_virtqueue;
+struct virtio_net_flow_desc;
+struct virtio_net_flow_stats;
 
 typedef int (*vhost_backend_init)(struct vhost_dev *dev, void *opaque,
                                   Error **errp);
@@ -126,6 +128,13 @@ typedef int (*vhost_get_device_id_op)(struct vhost_dev *dev, uint32_t *dev_id);
 
 typedef bool (*vhost_force_iommu_op)(struct vhost_dev *dev);
 
+typedef bool (*vhost_flow_offload_create_op)(struct vhost_dev *dev,
+                                             struct virtio_net_flow_desc *desc);
+typedef bool (*vhost_flow_offload_destroy_op)(struct vhost_dev *dev,
+                                              uint64_t flow_id);
+typedef bool (*vhost_flow_offload_query_op)(struct vhost_dev *dev,
+                                            struct virtio_net_flow_stats *stats);
+
 typedef struct VhostOps {
     VhostBackendType backend_type;
     vhost_backend_init vhost_backend_init;
@@ -171,6 +180,9 @@ typedef struct VhostOps {
     vhost_vq_get_addr_op  vhost_vq_get_addr;
     vhost_get_device_id_op vhost_get_device_id;
     vhost_force_iommu_op vhost_force_iommu;
+    vhost_flow_offload_create_op vhost_flow_offload_create;
+    vhost_flow_offload_destroy_op vhost_flow_offload_destroy;
+    vhost_flow_offload_query_op vhost_flow_offload_query;
 } VhostOps;
 
 int vhost_backend_update_device_iotlb(struct vhost_dev *dev,
